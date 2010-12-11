@@ -1,0 +1,26 @@
+this is a proof of concept ftp server that proxies ftp clients requests to putio http.
+
+its alpha, and works for me, using it with FileZilla.
+
+uses pyftpdlib, code is modified from https://github.com/tomatohater/faetus/blob/master/bin/faetus-server . 
+
+why:
+ because its really easy to download recursive folders and files using ftp.
+
+installation:
+ please dont use it, unless you are very brave, its not tested, and not completed. you have been warned.
+
+ if you insist, just download everything in a folder, edit config.py and change api_key and api_secret, and run with
+ python putio-ftp-connector.py
+	 
+ doesnt have any external dependencies - use the same pyftpdlib in the folder. then connect via your favorite ftp client to ftp://localhost:2121/ with any username. 
+
+
+todos:
+  - not tested with other clients - only filezilla and ncftp -, some ftp commands dont work on others.
+  - it uses urllib2 and makes range requests, which is a real throttle on download speed, it should be changed to curl and open a socket and read in chunks and push to socket asynchronously.
+  - its read only - you can just browse folders, and download files/folders
+  
+    
+
+ 
