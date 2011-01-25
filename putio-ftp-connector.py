@@ -17,6 +17,8 @@ from pathtoid import PathToId
 import pathtoid
 import config
 
+import pycurl
+
 class HttpFD(object):
 
     def __init__(self, apifile, bucket, obj, mode):
@@ -32,6 +34,9 @@ class HttpFD(object):
         self.read_size = 0
         # speed...
         self.read_bytes = 128 * 1024 # 128kb per iteration
+        self.buffer = ''
+        self.req = None
+        self.fd = None
 
 #        if not all([username, bucket, obj]):
 #            self.closed = True
@@ -57,15 +62,28 @@ class HttpFD(object):
 #            self.temp_file_path = tempfile.mkstemp()[1]
 #            self.temp_file = open(self.temp_file_path, 'w')
 
+
+#        c = pycurl.Curl()
+#        print "download_url >> ", self.download_url
+#        c.setopt(pycurl.URL, self.download_url.encode('utf-8'))
+#        c.setopt(c.WRITEFUNCTION, self.curl_write_func)
+#        c.perform()
+#        c.close()
+
+        # gets total size
+        req = urllib2.Request(self.download_url)
+        f = urllib2.urlopen(req)
+        self.total_size = f.headers.get('Content-Length')
+
+
+
+
     def write(self, data):
-        print ">>>>>>>>>>>> write"
-        if 'r' in self.mode:
-            raise OSError(1, 'Operation not permitted')
-        self.temp_file.write(data)
+        raise OSError(1, 'Operation not permitted')
+        # self.temp_file.write(data)
 
     def close(self):
-        if 'r' in self.mode:
-            return
+        return
         self.temp_file.close()
         self.obj.set_contents_from_filename(self.temp_file_path)
         self.obj.close()
@@ -75,9 +93,19 @@ class HttpFD(object):
         self.temp_file_path = None
         self.temp_file = None
 
+    def curl_write_func(self, buf):
+        self.buffer = self.buffer + buf
+
+    def __read(self, size=65536):
+        c =  self.buffer
+        self.buffer = ''
+        return c
+
+
     def read(self, size=65536):
         # req = urllib2.Request('https://www.put.io/download-file/4/11150051')
-        req = urllib2.Request(self.download_url)
+        if self.req == None:
+            self.req = urllib2.Request(self.download_url)
 
 #        username = ''
 #        password = ''
@@ -86,24 +114,27 @@ class HttpFD(object):
 
         read_next = self.read_size + self.read_bytes
 
-        req.headers['Range'] = 'bytes=%s-%s' % (self.read_size, read_next)
-
-        print "range:", req.headers['Range']
+#        req.headers['Range'] = 'bytes=%s-%s' % (self.read_size, read_next)
+#
+#        print "range:", req.headers['Range']
 
         if self.total_size == None:
-          f = urllib2.urlopen(req)
-          range=f.headers.get('Content-Range')
-          # bytes 0-10/26
-          self.total_size = int(range.split('/')[1])
+          pass
+#          f = urllib2.urlopen(req)
+#          range=f.headers.get('Content-Range')
+#          # bytes 0-10/26
+#          self.total_size = int(range.split('/')[1])
 
-        print "readsize > totalsize", self.read_size, self.total_size
+        #print "readsize > totalsize", self.read_size, self.total_size
 
         if self.read_size > self.total_size:
           return
 
         self.read_size = self.read_size + self.read_bytes + 1
-        f = urllib2.urlopen(req)
-        return f.read()
+        if not self.fd:
+            self.fd = urllib2.urlopen(self.req)
+
+        return self.fd.read(1024)
 
         #return self.obj.read()
 
@@ -115,12 +146,12 @@ class HttpFD(object):
 idfinder = PathToId()
 idfinder.load_items()
 
-api = putio.Api(config.apikey,config.apisecret)
+api = None
 
 
 class HttpFS(ftpserver.AbstractedFS):
 
-    
+
 
     def __init__(self):
         self.root = None
@@ -152,18 +183,18 @@ class HttpFS(ftpserver.AbstractedFS):
           print 'found............'
           apifile = self.dirlistcache[filename]
           print 'found........', apifile.id, apifile.name
-          
+
         else:
           if filename == '/':
-            items = api.get_items()
+            items = operations.api.get_items()
           else:
             id = idfinder.find_item_by_path(filename)
             print "file id:", id
-            apifile = api.get_items(id=id)[0]
+            apifile = operations.api.get_items(id=id)[0]
 
         print apifile.get_download_url()
 
-        # 
+        #
         return HttpFD(apifile, None, filename, mode)
 
     def chdir(self, path):
@@ -346,22 +377,22 @@ class HttpFS(ftpserver.AbstractedFS):
       print 'basedir', basedir
       print 'listing', listing
 
-      # find item in cache...      
+      # find item in cache...
       if basedir in self.dirlistcache:
         print 'found............'
         fnd = self.dirlistcache[basedir]
         print 'found........', fnd.id, fnd.name
         try:
-          items = api.get_items(parent_id = fnd.id)
+          items = operations.api.get_items(parent_id = fnd.id)
         except:
           items = []
       else:
         if basedir == '/':
-          items = api.get_items()
+          items = operations.api.get_items()
         else:
           parent_id = self.idfinder.find_item_by_path(pathtoid._utf8(basedir))
           print "parent_id:", parent_id
-          items = api.get_items(parent_id=parent_id)
+          items = operations.api.get_items(parent_id=parent_id)
 
 
       c = 0
@@ -401,7 +432,12 @@ class HttpOperations(object):
 
     def authenticate(self, username, password):
         self.username = username
-        self.connection = S3Connection(username, password)
+        self.password = password
+        config.apisecret = password
+        config.apikey    = username
+        print "here !..............."
+        self.api = putio.Api(config.apikey,config.apisecret)
+        return True
 
 
     def __repr__(self):
@@ -410,24 +446,15 @@ class HttpOperations(object):
 operations = HttpOperations()
 
 
-
-
-
-
-
-
-
-
-
 class HttpAuthorizer(ftpserver.DummyAuthorizer):
-    '''FTP server authorizer. Logs the users into Rackspace Cloud
+    '''FTP server authorizer. Logs the users into Putio Cloud
 Files and keeps track of them.
 '''
     users = {}
 
     def validate_authentication(self, username, password):
         try:
-            #operations.authenticate(username, password)
+            operations.authenticate(username, password)
             return True
         except:
             return False
@@ -442,7 +469,7 @@ Files and keeps track of them.
         return 'lrdw'
 
     def get_home_dir(self, username):
-        return os.sep 
+        return os.sep
 
     def get_msg_login(self, username):
         return 'Welcome %s' % username
@@ -519,5 +546,4 @@ if __name__ == '__main__':
 
 
     main()
-
 
