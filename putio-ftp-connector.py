@@ -17,7 +17,6 @@ from pathtoid import PathToId
 import pathtoid
 import config
 
-import pycurl
 
 class HttpFD(object):
 
@@ -30,6 +29,7 @@ class HttpFD(object):
         self.mode = mode
         self.closed = False
         self.total_size = None
+        self.seekpos = None
 
         self.read_size = 0
         # speed...
@@ -37,39 +37,7 @@ class HttpFD(object):
         self.buffer = ''
         self.req = None
         self.fd = None
-
-#        if not all([username, bucket, obj]):
-#            self.closed = True
-#            raise IOError(1, 'Operation not permitted')
-#
-#        try:
-#            self.bucket = \
-#                operations.connection.get_bucket(self.bucket)
-#        except:
-#            raise IOError(2, 'No such file or directory')
-#
-#        if 'r' in self.mode:
-#            try:
-#                self.obj = self.bucket.get_key(self.name)
-#            except:
-#                raise IOError(2, 'No such file or directory')
-#        else: #write
-#            self.obj = self.bucket.get_key(self.name)
-#            if not self.obj:
-#                # key does not exist, create it
-#                self.obj = self.bucket.new_key(self.name)
-#            # create a temporary file
-#            self.temp_file_path = tempfile.mkstemp()[1]
-#            self.temp_file = open(self.temp_file_path, 'w')
-
-
-#        c = pycurl.Curl()
-#        print "download_url >> ", self.download_url
-#        c.setopt(pycurl.URL, self.download_url.encode('utf-8'))
-#        c.setopt(c.WRITEFUNCTION, self.curl_write_func)
-#        c.perform()
-#        c.close()
-
+        
         # gets total size
         req = urllib2.Request(self.download_url)
         f = urllib2.urlopen(req)
@@ -112,9 +80,11 @@ class HttpFD(object):
 #        base64string = base64.encodestring('%s:%s' % (username, password))[:-1]
 #        req.add_header("Authorization", "Basic %s" % base64string)
 
-        read_next = self.read_size + self.read_bytes
+#        read_next = self.read_size + self.read_bytes
 
 #        req.headers['Range'] = 'bytes=%s-%s' % (self.read_size, read_next)
+        if self.seekpos:
+            self.req.headers['Range'] = 'bytes=%s-' % (self.seekpos)
 #
 #        print "range:", req.headers['Range']
 
@@ -138,9 +108,11 @@ class HttpFD(object):
 
         #return self.obj.read()
 
-    def seek(self, *kargs, **kwargs):
+    def seek(self, frombytes, **kwargs):
         print ">>>>>>>>>> seek"
-        raise IOError(1, 'Operation not permitted')
+        self.seekpos = frombytes
+        return 
+        
 
 # ....
 idfinder = PathToId()
@@ -198,10 +170,7 @@ class HttpFS(ftpserver.AbstractedFS):
         return HttpFD(apifile, None, filename, mode)
 
     def chdir(self, path):
-        print ">>>>>>>>>>>>> chdir:" , path
-        print ">>>>>>>>>>>>>  root:", self.root
         self.cwd = path.decode('utf-8').encode('utf-8')
-        print ">>>>>>>>>>>> cwd:", self.cwd, type(self.cwd)
         return
 #        if path.startswith(self.root):
 #            _, bucket, obj = self.parse_fspath(path)
@@ -318,16 +287,32 @@ class HttpFS(ftpserver.AbstractedFS):
                 raise OSError(2, 'No such file or directory')
             return obj in objects
 
+
+    def _getitem(self, filename):
+        print "filename: ", filename
+#        username, bucket, obj = self.parse_fspath(filename)
+
+        if filename in self.dirlistcache:
+          print 'found............'
+          apifile = self.dirlistcache[filename]
+          print 'found........', apifile.id, apifile.name
+
+        else:
+          if filename == '/':
+            items = operations.api.get_items()
+          else:
+            id = idfinder.find_item_by_path(filename)
+            print "file id:", id
+            apifile = operations.api.get_items(id=id)[0]
+            
+        return apifile #.get_download_url()
+
+
     def stat(self, path):
-        _, bucket, name = self.parse_fspath(path)
-        if not name:
-            raise OSError(40, 'unsupported')
-        try:
-            bucket = operations.connection.get_bucket(bucket)
-            obj = bucket.get_key(name)
-            return os.stat_result((666, 0L, 0L, 0, 0, 0, obj.size, 0, 0, 0))
-        except:
-            raise OSError(2, 'No such file or directory')
+        print ">>>>>> stat:", path
+        apifile = self._getitem(path)
+
+        return os.stat_result((666, 0L, 0L, 0, 0, 0, apifile.size, 0, 0, 0))
 
     exists = lexists
     lstat = stat

@@ -1,6 +1,7 @@
 # encoding: utf-8
 import putio
 import config
+import os
 
 def _unicode(s):
     if isinstance(s, str):
@@ -17,17 +18,20 @@ def _utf8(s):
     assert isinstance(s, str)
     return s
 
+sep = os.path.sep
+sepsep = sep + sep
+
 class PathToId:
 
   def __init__(self):
-    self.cache = {'//':0, '/':0}
+    self.cache = {sepsep:0, sep:0}
 
 
 
   def encode_key(self, s):
     return _utf8(s)
 
-  def load_items(self, path='/', parent_id=0):
+  def load_items(self, path=sep, parent_id=0):
     api = putio.Api(config.apikey, config.apisecret)
 
     # TODO: cache the items will you ?
@@ -37,7 +41,7 @@ class PathToId:
       items = []
       
     for i in items:
-      key = self.encode_key(_utf8(path) + '/' + _utf8(i.name) )
+      key = self.encode_key(_utf8(path) + sep + _utf8(i.name) )
       self.cache[key] = i.id
 
   def find_item_by_path(self, path):
@@ -45,24 +49,24 @@ class PathToId:
     if path == '/':
       return 0
 
-    if not path.startswith('/'):
+    if not path.startswith(sep):
       raise ValueError('parse_fspath: You have to provide a full path')
 
 #    if not path.startswith('//'):
 #      path = '/' + path
 
-    parents = path.split('/')[1:]
+    parents = path.split(sep)[1:]
     # check if they are cached or not...
-    k = '/'
+    k = sep
     lparentid = 0
     lparentpath = ''
     for dir in parents:
       self.load_items(k, self.cache[self.encode_key(k)])
-      k = k + '/' + dir
+      k = k + sep + dir
       print k
     self.load_items(k, self.cache[self.encode_key(k)])
 
-    return self.cache[self.encode_key('/' + _utf8(path) )]
+    return self.cache[self.encode_key(sep + _utf8(path) )]
 
 
 if __name__ == '__main__':
@@ -81,4 +85,5 @@ if __name__ == '__main__':
 
 #  s = 'çöğüışIĞÜÇÖ'.decode('utf-8')
 #  print s, type(s)
-  
+
+
