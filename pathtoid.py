@@ -46,7 +46,7 @@ class PathToId:
 
   def find_item_by_path(self, path):
     # this is root
-    if path == '/':
+    if path == sep:
       return 0
 
     if not path.startswith(sep):
@@ -71,7 +71,7 @@ class PathToId:
 
 if __name__ == '__main__':
   api = putio.Api(config.apikey, config.apisecret)
-  items = api.get_items()
+  items = api.get_items(parent_id=24, limit=300)
   for i in items:
     print ">", i.id, i.name.encode('utf-8')
 
