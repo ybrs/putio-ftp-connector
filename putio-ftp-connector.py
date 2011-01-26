@@ -190,14 +190,13 @@ class HttpFS(ftpserver.AbstractedFS):
 #        raise OSError(550, 'Failed to change directory.')
 
     def mkdir(self, path):
-        try:
-            _, bucket, obj = self.parse_fspath(path)
-            if obj:
-                raise OSError(1, 'Operation not permitted')
-        except(ValueError):
-            raise OSError(2, 'No such file or directory')
-
-        operations.connection.create_bucket(bucket)
+      dirs = os.path.split(path)
+      apifile = self._getitem(dirs[0])
+      if not apifile: #this is root
+        operations.api.create_folder(name = dirs[1], parent_id = 0)
+      else:
+        apifile.create_folder(name=dirs[1])
+      
 
     def listdir(self, path):
       return ['a1.txt', 'b1.txt', 'c1.txt']
@@ -217,36 +216,40 @@ class HttpFS(ftpserver.AbstractedFS):
 #                raise OSError(2, 'No such file or directory')
 
     def rmdir(self, path):
-        _, bucket, name = self.parse_fspath(path)
+      apifile = self._getitem(path)
+      if not apifile:
+        raise OSError(2, 'No such file or directory')
+      apifile.delete_item()
 
-        if name:
-            raise OSError(13, 'Operation not permitted')
-
-        try:
-            bucket = operations.connection.get_bucket(bucket)
-        except:
-            raise OSError(2, 'No such file or directory')
-
-        try:
-            operations.connection.delete_bucket(bucket)
-        except:
-            raise OSError(39, "Directory not empty: '%s'" % bucket)
 
     def remove(self, path):
-        _, bucket, name = self.parse_fspath(path)
-
-        if not name:
-            raise OSError(13, 'Operation not permitted')
-
-        try:
-            bucket = operations.connection.get_bucket(bucket)
-            bucket.delete_key(name)
-        except:
-            raise OSError(2, 'No such file or directory')
-        return not name
+      apifile = self._getitem(path)
+      if not apifile:
+        raise OSError(2, 'No such file or directory')
+      apifile.delete_item()
 
     def rename(self, src, dst):
-        raise OSError(1, 'Operation not permitted')
+      print "src>>>>>>", src, dst
+      apifile = self._getitem(src)
+      if not apifile:
+        raise OSError(2, 'No such file or directory')
+
+      srcs = os.path.split(src)
+      dsts = os.path.split(dst)
+
+      if srcs[0] != dsts[0]:
+        # this is a move operation..
+        if dsts[0] == os.path.sep:
+          apifile.move_item(target=0)
+          return
+          
+        destination = self._getitem(dsts[0]);
+        if not destination:
+          raise OSError(2, 'No such file or directory')
+        apifile.move_item(target=destination.id)
+        return
+
+      apifile.rename_item(dsts[1])
 
     def isfile(self, path):
         return not self.isdir(path)
@@ -270,22 +273,27 @@ class HttpFS(ftpserver.AbstractedFS):
         return path
 
     def lexists(self, path):
-        try:
-            _, bucket, obj = self.parse_fspath(path)
-        except(ValueError):
-            raise OSError(2, 'No such file or directory')
+      apifile = self._getitem(path)
+      if not apifile:
+        raise OSError(2, 'No such file or directory')
+      return apifile
 
-        if not bucket and not obj:
-            buckets = operations.connection.get_all_buckets()
-            return bucket in buckets
-
-        if bucket and not obj:
-            try:
-                cnt = operations.connection.get_bucket(bucket)
-                objects = cnt.list()
-            except:
-                raise OSError(2, 'No such file or directory')
-            return obj in objects
+#        try:
+#            _, bucket, obj = self.parse_fspath(path)
+#        except(ValueError):
+#            raise OSError(2, 'No such file or directory')
+#
+#        if not bucket and not obj:
+#            buckets = operations.connection.get_all_buckets()
+#            return bucket in buckets
+#
+#        if bucket and not obj:
+#            try:
+#                cnt = operations.connection.get_bucket(bucket)
+#                objects = cnt.list()
+#            except:
+#                raise OSError(2, 'No such file or directory')
+#            return obj in objects
 
 
     def _getitem(self, filename):
@@ -298,8 +306,9 @@ class HttpFS(ftpserver.AbstractedFS):
           print 'found........', apifile.id, apifile.name
 
         else:
-          if filename == '/':
+          if filename == os.path.sep:
             items = operations.api.get_items()
+            return False
           else:
             id = idfinder.find_item_by_path(filename)
             print "file id:", id
