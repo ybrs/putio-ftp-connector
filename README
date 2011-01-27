@@ -35,7 +35,6 @@ whats new:
   - added rename, create dir, move, delete operations.
 
 todos:  
-  - not tested with other clients - only filezilla and ncftp -, some ftp commands dont work on others.
   - no file uploads - putio api doesn't have an upload method yet.
   - tons of debug output.
     
