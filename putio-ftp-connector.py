@@ -336,9 +336,9 @@ class HttpFS(ftpserver.AbstractedFS):
     def format_list_items(self, items):
       for item in items:
         if item.is_dir:
-          s = 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % ('aaa', 0, pathtoid._utf8(item.name))
+          s = 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % ('aaa', 0, item.name)
         else:
-          s = '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % ('aaa', item.size, time.strftime("%b %d %H:%M"), pathtoid._utf8(item.name))
+          s = '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % ('aaa', item.size, time.strftime("%b %d %H:%M"), item.name)
         yield s.encode('utf-8')
 
     def get_list_dir(self, path):
