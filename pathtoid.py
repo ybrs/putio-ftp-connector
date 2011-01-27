@@ -25,18 +25,26 @@ class PathToId:
 
   def __init__(self):
     self.cache = {sepsep:0, sep:0}
-
-
+    self.itemscache = {}
+    self.api = None 
 
   def encode_key(self, s):
     return _utf8(s)
 
-  def load_items(self, path=sep, parent_id=0):
-    api = putio.Api(config.apikey, config.apisecret)
+  def get_items_cache(self, parent_id=0):
+    if parent_id in self.itemscache:
+      return self.itemscache[parent_id]
+    return False
 
-    # TODO: cache the items will you ?
+  def load_items(self, path=sep, parent_id=0):
+    
     try:
-      items = api.get_items(parent_id=parent_id)
+      if self.get_items_cache(parent_id):
+        items = self.get_items_cache(parent_id)
+      else:
+        self.api = putio.Api(config.apikey, config.apisecret)
+        items = self.api.get_items(parent_id=parent_id)
+        self.itemscache[parent_id] = items
     except: #     raise PutioError("You have no items to show.") for empty folders ? wtf.
       items = []
       
