@@ -1,11 +1,11 @@
-this is a proof of concept ftp server that proxies ftp clients requests to putio http.
+this is a proof of concept ftp server that proxies ftp clients requests to putio http, or in other words an ftp interface to put.io.
 
-its alpha, and works for me, using it with FileZilla.
+its alpha, and works for me. for screenshots or some more details i wrote a blog post http://ybrs.in/2011/01/27/putio-ftp-connector/
 
 uses pyftpdlib, code is modified from https://github.com/tomatohater/faetus/blob/master/bin/faetus-server . 
 
-why:
- because its really easy to download recursive folders and files using ftp.
+
+
 
 installation:
 
@@ -20,11 +20,14 @@ installation:
 
    i. install python 2.6.6 ( http://www.python.org/download/releases/2.6.6/ ) - i don't know if other versions will work or not. 
   ii. download everything to one folder. double click putio-ftp-connector.py . (when you run connector it will say something like Serving FTP on 192.168.1.225:2121, 192.168.1.255 is your local ip address)
+      if you see an ipv6 kind adress or can't see an ip address when it starts edit config.py  and enter your ipadress there.
+
  iii. download filezilla from http://filezilla-project.org/download.php?type=client and enter your local ip address to server and enter 2121 to port. use your putio apikey as username and apisecret as password.
   iv. hit connect, if everything goes well you will see your files.
 
 
 whats new:
+  - tested, fixed some problems with some clients, now it works with windows explorer, ie8, firefox, chrome, smartftp, filezilla, ncftp, webdrive, ftpdrive and probably most other clients.
   - works on windows
   - added resume support
   - no more config edits, api key and secret works as username, password
