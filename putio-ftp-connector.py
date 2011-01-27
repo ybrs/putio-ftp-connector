@@ -16,7 +16,7 @@ import putio
 from pathtoid import PathToId
 import pathtoid
 import config
-
+import time
 
 class HttpFD(object):
 
@@ -157,14 +157,18 @@ class HttpFS(ftpserver.AbstractedFS):
           print 'found........', apifile.id, apifile.name
 
         else:
-          if filename == '/':
-            items = operations.api.get_items()
+          if filename == os.path.sep:
+            # items = operations.api.get_items()
+            # this is not a file its a directory
+            # raise OSError(1, 'This is a directory')
+            raise IOError(1, 'This is a directory')
           else:
             id = idfinder.find_item_by_path(filename)
             print "file id:", id
             apifile = operations.api.get_items(id=id)[0]
 
-        print apifile.get_download_url()
+        if apifile.is_dir:
+          raise IOError(1, 'This is a directory')
 
         #
         return HttpFD(apifile, None, filename, mode)
@@ -329,38 +333,65 @@ class HttpFS(ftpserver.AbstractedFS):
     def validpath(self, path):
         return True
 
+    def format_list_items(self, items):
+      for item in items:
+        if item.is_dir:
+          s = 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % ('aaa', 0, pathtoid._utf8(item.name))
+        else:
+          s = '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % ('aaa', item.size, time.strftime("%b %d %H:%M"), pathtoid._utf8(item.name))
+        yield s.encode('utf-8')
+
     def get_list_dir(self, path):
         try:
-            _, bucket, obj = self.parse_fspath(path)
-        except(ValueError):
-            raise OSError(2, 'No such file or directory')
+          item = self._getitem(path)
+        except:
+          return self.format_list_items([])
+        
+        if not item:
+          items = operations.api.get_items()
+        else:
+          try:
+            items = operations.api.get_items(parent_id=item.id)
+          except:
+            return self.format_list_items([])
+        return self.format_list_items(items)
 
-        if not bucket and not obj:
-            buckets = operations.connection.get_all_buckets()
-            return self.format_list_buckets(buckets)
+          
 
-        if bucket and not obj:
-            try:
-                cnt = operations.connection.get_bucket(bucket)
-                objects = cnt.list()
-            except:
-                raise OSError(2, 'No such file or directory')
-            return self.format_list_objects(objects)
 
-    def format_list_objects(self, items):
-        for item in items:
-            ts = datetime.datetime(
-                *time.strptime(
-                    item.last_modified[:item.last_modified.find('.')],
-                    "%Y-%m-%dT%H:%M:%S")[0:6]).strftime("%b %d %H:%M")
+        return
 
-            yield '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % \
-                (operations.username, item.size, ts, item.name)
+#        try:
+#            _, bucket, obj = self.parse_fspath(path)
+#        except(ValueError):
+#            raise OSError(2, 'No such file or directory')
+#
+#        if not bucket and not obj:
+#            buckets = operations.connection.get_all_buckets()
+#            return self.format_list_buckets(buckets)
+#
+#        if bucket and not obj:
+#            try:
+#                cnt = operations.connection.get_bucket(bucket)
+#                objects = cnt.list()
+#            except:
+#                raise OSError(2, 'No such file or directory')
+#            return self.format_list_objects(objects)
 
-    def format_list_buckets(self, buckets):
-        for bucket in buckets:
-            yield 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % \
-                (operations.username, 0, bucket.name)
+#    def format_list_objects(self, items):
+#        for item in items:
+#            ts = datetime.datetime(
+#                *time.strptime(
+#                    item.last_modified[:item.last_modified.find('.')],
+#                    "%Y-%m-%dT%H:%M:%S")[0:6]).strftime("%b %d %H:%M")
+#
+#            yield '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % \
+#                (operations.username, item.size, ts, item.name)
+
+#    def format_list_buckets(self, buckets):
+#        for bucket in buckets:
+#            yield 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % \
+#                (operations.username, 0, bucket.name)
 
     def get_stat_dir(self, *kargs, **kwargs):
         raise OSError(40, 'unsupported')
@@ -487,8 +518,7 @@ def main():
 #      ftpd = ftpserver.FTPServer((options.bind_address,
 #                                  options.port),
 #                                 ftp_handler)
-
-      address = ('', 2121 )
+      address = (config.ip_address, 2121 )
       ftpd = ftpserver.FTPServer(address, ftp_handler)
       ftpd.serve_forever()
 
