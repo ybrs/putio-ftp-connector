@@ -31,10 +31,23 @@ class PathToId:
   def encode_key(self, s):
     return _utf8(s)
 
+  def invalidate_items_cache_by_path(self, path):
+      try:
+        item = self.find_item_by_path(path)
+        if item:
+          self.invalidate_items_cache(item)
+      except:
+        pass
+
+
+  def invalidate_items_cache(self, parent_id):
+      if parent_id in self.itemscache:
+          del self.itemscache[parent_id]
+
   def get_items_cache(self, parent_id=0):
-    if parent_id in self.itemscache:
-      return self.itemscache[parent_id]
-    return False
+      if parent_id in self.itemscache:
+          return self.itemscache[parent_id]
+      return False
 
   def load_items(self, path=sep, parent_id=0):
     
@@ -60,9 +73,6 @@ class PathToId:
     if not path.startswith(sep):
       raise ValueError('parse_fspath: You have to provide a full path')
 
-#    if not path.startswith('//'):
-#      path = '/' + path
-
     parents = path.split(sep)[1:]
     # check if they are cached or not...
     k = sep
@@ -71,17 +81,25 @@ class PathToId:
     for dir in parents:
       self.load_items(k, self.cache[self.encode_key(k)])
       k = k + sep + dir
-      print k
+      print "key: >>>> ", k
     self.load_items(k, self.cache[self.encode_key(k)])
 
     return self.cache[self.encode_key(sep + _utf8(path) )]
 
 
 if __name__ == '__main__':
-  api = putio.Api(config.apikey, config.apisecret)
-  items = api.get_items(parent_id=24, limit=300)
-  for i in items:
-    print ">", i.id, i.name.encode('utf-8')
+#  api = putio.Api(config.apikey, config.apisecret)
+#  items = api.get_items(parent_id=24, limit=300)
+#  for i in items:
+#    print ">", i.id, i.name.encode('utf-8')
+
+  p = PathToId()
+  print p.find_item_by_path('/123/9')
+  p.invalidate_items_cache_by_path('/123/8')
+#  p.invalidate_items_cache_by_path('/123/9')
+#  p.invalidate_items_cache_by_path('/123')
+#  print p.find_item_by_path('/123/9')
+#  print p.find_item_by_path('/123')
 
 #  p = PathToId()
 #  #p.load_items('/x', 11156055)

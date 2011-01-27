@@ -21,7 +21,6 @@ import time
 class HttpFD(object):
 
     def __init__(self, apifile, bucket, obj, mode):
-
         self.apifile = apifile
         self.download_url = apifile.get_stream_url()
         self.bucket = bucket
@@ -44,58 +43,24 @@ class HttpFD(object):
         self.total_size = f.headers.get('Content-Length')
 
 
-
-
     def write(self, data):
         raise OSError(1, 'Operation not permitted')
         # self.temp_file.write(data)
 
     def close(self):
         return
-        self.temp_file.close()
-        self.obj.set_contents_from_filename(self.temp_file_path)
-        self.obj.close()
-
-        # clean up the temporary file
-        os.remove(self.temp_file_path)
-        self.temp_file_path = None
-        self.temp_file = None
-
-    def curl_write_func(self, buf):
-        self.buffer = self.buffer + buf
 
     def __read(self, size=65536):
         c =  self.buffer
         self.buffer = ''
         return c
 
-
     def read(self, size=65536):
-        # req = urllib2.Request('https://www.put.io/download-file/4/11150051')
         if self.req == None:
             self.req = urllib2.Request(self.download_url)
 
-#        username = ''
-#        password = ''
-#        base64string = base64.encodestring('%s:%s' % (username, password))[:-1]
-#        req.add_header("Authorization", "Basic %s" % base64string)
-
-#        read_next = self.read_size + self.read_bytes
-
-#        req.headers['Range'] = 'bytes=%s-%s' % (self.read_size, read_next)
         if self.seekpos:
             self.req.headers['Range'] = 'bytes=%s-' % (self.seekpos)
-#
-#        print "range:", req.headers['Range']
-
-        if self.total_size == None:
-          pass
-#          f = urllib2.urlopen(req)
-#          range=f.headers.get('Content-Range')
-#          # bytes 0-10/26
-#          self.total_size = int(range.split('/')[1])
-
-        #print "readsize > totalsize", self.read_size, self.total_size
 
         if self.read_size > self.total_size:
           return
@@ -106,7 +71,6 @@ class HttpFD(object):
 
         return self.fd.read(1024)
 
-        #return self.obj.read()
 
     def seek(self, frombytes, **kwargs):
         print ">>>>>>>>>> seek"
@@ -123,8 +87,6 @@ api = None
 
 class HttpFS(ftpserver.AbstractedFS):
 
-
-
     def __init__(self):
         self.root = None
         self.cwd = '/'
@@ -132,30 +94,11 @@ class HttpFS(ftpserver.AbstractedFS):
         self.dirlistcache = {}
         self.idfinder = idfinder
 
-#    def parse_fspath(self, path):
-#        '''Returns a (username, site, filename) tuple. For shorter paths
-#replaces not provided values with empty strings.
-#'''
-#        if not path.startswith(os.sep):
-#            raise ValueError('parse_fspath: You have to provide a full path')
-#        parts = path.split(os.sep)[1:]
-#        if len(parts) > 3:
-#            # join extra 'directories' into key
-#            parts = parts[0], parts[1], os.sep.join(parts[2:])
-#        while len(parts) < 3:
-#            parts.append('')
-#        return tuple(parts)
-
-
     def open(self, filename, mode):
         print "filename: ", filename
-#        username, bucket, obj = self.parse_fspath(filename)
 
         if filename in self.dirlistcache:
-          print 'found............'
           apifile = self.dirlistcache[filename]
-          print 'found........', apifile.id, apifile.name
-
         else:
           if filename == os.path.sep:
             # items = operations.api.get_items()
@@ -164,7 +107,7 @@ class HttpFS(ftpserver.AbstractedFS):
             raise IOError(1, 'This is a directory')
           else:
             id = idfinder.find_item_by_path(filename)
-            print "file id:", id
+            print "file id:", filename, id
             apifile = operations.api.get_items(id=id)[0]
 
         if apifile.is_dir:
@@ -175,23 +118,6 @@ class HttpFS(ftpserver.AbstractedFS):
 
     def chdir(self, path):
         self.cwd = path.decode('utf-8').encode('utf-8')
-        return
-#        if path.startswith(self.root):
-#            _, bucket, obj = self.parse_fspath(path)
-#
-#            if not bucket:
-#                self.cwd = self.fs2ftp(path)
-#                return
-#
-#            if not obj:
-#                try:
-#                    operations.connection.get_bucket(bucket)
-#                    self.cwd = self.fs2ftp(path)
-#                    return
-#                except:
-#                    raise OSError(2, 'No such file or directory')
-#
-#        raise OSError(550, 'Failed to change directory.')
 
     def mkdir(self, path):
       dirs = os.path.split(path)
@@ -200,30 +126,42 @@ class HttpFS(ftpserver.AbstractedFS):
         operations.api.create_folder(name = dirs[1], parent_id = 0)
       else:
         apifile.create_folder(name=dirs[1])
+      self.remove_from_cache(path)
+      self.remove_from_cache(dirs[0])
       
 
     def listdir(self, path):
-      return ['a1.txt', 'b1.txt', 'c1.txt']
-#        try:
-#            _, bucket, obj = self.parse_fspath(path)
-#        except(ValueError):
-#            raise OSError(2, 'No such file or directory')
-#
-#        if not bucket and not obj:
-#            return operations.connection.get_all_buckets()
-#
-#        if bucket and not obj:
-#            try:
-#                cnt = operations.connection.get_bucket(bucket)
-#                return cnt.list()
-#            except:
-#                raise OSError(2, 'No such file or directory')
+        ret = []
+        try:
+          item = self._getitem(path)
+        except:
+          return []
+
+        if not item:
+          items = operations.api.get_items()
+        else:
+          try:
+            items = operations.api.get_items(parent_id=item.id)
+          except:
+            return []
+
+        for i in items:
+          ret.append(i.name)
+          
+        return ret
+
+    def remove_from_cache(self, path):
+      if path in self.dirlistcache:
+        del self.dirlistcache[path]
+      idfinder.invalidate_items_cache_by_path(path)
+      
 
     def rmdir(self, path):
       apifile = self._getitem(path)
       if not apifile:
         raise OSError(2, 'No such file or directory')
       apifile.delete_item()
+      self.remove_from_cache(path)
 
 
     def remove(self, path):
@@ -231,6 +169,7 @@ class HttpFS(ftpserver.AbstractedFS):
       if not apifile:
         raise OSError(2, 'No such file or directory')
       apifile.delete_item()
+      self.remove_from_cache(path)
 
     def rename(self, src, dst):
       print "src>>>>>>", src, dst
@@ -254,6 +193,10 @@ class HttpFS(ftpserver.AbstractedFS):
         return
 
       apifile.rename_item(dsts[1])
+      self.remove_from_cache(src)
+      self.remove_from_cache(srcs[0])
+      self.remove_from_cache(dst)
+      self.remove_from_cache(dsts[0])
 
     def isfile(self, path):
         return not self.isdir(path)
@@ -271,9 +214,6 @@ class HttpFS(ftpserver.AbstractedFS):
         return True
       else:
         return False
-      
-#        _, _, name = self.parse_fspath(path)
-#        return not name
 
     def getsize(self, path):
       print ">>>>>>>>>>>>> GETSIZE"
@@ -281,50 +221,28 @@ class HttpFS(ftpserver.AbstractedFS):
       if not apifile:
         raise OSError(1, 'No such file or directory')
       print "filesize :", apifile.size
-      return apifile.size
+      return long(apifile.size)
         #return self.stat(path).st_size
 
     def getmtime(self, path):
+        print "mtime"
         return self.stat(path).st_mtime
 
     def realpath(self, path):
         return path
 
     def lexists(self, path):
+      print "lexists"
       apifile = self._getitem(path)
       if not apifile:
         raise OSError(2, 'No such file or directory')
       return apifile
 
-#        try:
-#            _, bucket, obj = self.parse_fspath(path)
-#        except(ValueError):
-#            raise OSError(2, 'No such file or directory')
-#
-#        if not bucket and not obj:
-#            buckets = operations.connection.get_all_buckets()
-#            return bucket in buckets
-#
-#        if bucket and not obj:
-#            try:
-#                cnt = operations.connection.get_bucket(bucket)
-#                objects = cnt.list()
-#            except:
-#                raise OSError(2, 'No such file or directory')
-#            return obj in objects
-
-
-    def findincache(self, filename):
-      if filename in self.dirlistcache:
-        return self.dirlistcache[filename]
-
 
     def _getitem(self, filename):
         print "filename: ", filename
-#        username, bucket, obj = self.parse_fspath(filename)
 
         if filename in self.dirlistcache:
-          print 'found............'
           apifile = self.dirlistcache[filename]
           print 'found........', apifile.id, apifile.name
         else:
@@ -375,46 +293,6 @@ class HttpFS(ftpserver.AbstractedFS):
             return self.format_list_items([])
         return self.format_list_items(items)
 
-          
-
-
-        return
-
-#        try:
-#            _, bucket, obj = self.parse_fspath(path)
-#        except(ValueError):
-#            raise OSError(2, 'No such file or directory')
-#
-#        if not bucket and not obj:
-#            buckets = operations.connection.get_all_buckets()
-#            return self.format_list_buckets(buckets)
-#
-#        if bucket and not obj:
-#            try:
-#                cnt = operations.connection.get_bucket(bucket)
-#                objects = cnt.list()
-#            except:
-#                raise OSError(2, 'No such file or directory')
-#            return self.format_list_objects(objects)
-
-#    def format_list_objects(self, items):
-#        for item in items:
-#            ts = datetime.datetime(
-#                *time.strptime(
-#                    item.last_modified[:item.last_modified.find('.')],
-#                    "%Y-%m-%dT%H:%M:%S")[0:6]).strftime("%b %d %H:%M")
-#
-#            yield '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % \
-#                (operations.username, item.size, ts, item.name)
-
-#    def format_list_buckets(self, buckets):
-#        for bucket in buckets:
-#            yield 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % \
-#                (operations.username, 0, bucket.name)
-
-    def get_stat_dir(self, *kargs, **kwargs):
-        raise OSError(40, 'unsupported')
-
     def format_mlsx(self, basedir, listing, perms, facts, ignore_err=True):
 
       print 'facts', facts
@@ -431,7 +309,7 @@ class HttpFS(ftpserver.AbstractedFS):
         except:
           items = []
       else:
-        if basedir == '/':
+        if basedir == os.path.sep:
           items = operations.api.get_items()
         else:
           parent_id = self.idfinder.find_item_by_path(pathtoid._utf8(basedir))
@@ -455,7 +333,7 @@ class HttpFS(ftpserver.AbstractedFS):
 
           ln = "%s%sperm=r;modify=20071029155301;unique=11150051; %s\r\n" % (type, size, i.name)
 
-          if basedir=='/':
+          if basedir== os.path.sep:
             key = '/%s' % (pathtoid._utf8(i.name))
           else:
             key = '%s/%s' % (pathtoid._utf8(basedir), pathtoid._utf8(i.name))
