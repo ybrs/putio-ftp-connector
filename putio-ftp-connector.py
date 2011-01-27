@@ -262,13 +262,27 @@ class HttpFS(ftpserver.AbstractedFS):
         return False
 
     def isdir(self, path):
-      print "path:", path
-      return True
+      if path == os.path.sep:
+        return True
+      apifile = self._getitem(path)
+      if not apifile:
+        raise OSError(2, 'No such file or directory')
+      if apifile.is_dir:
+        return True
+      else:
+        return False
+      
 #        _, _, name = self.parse_fspath(path)
 #        return not name
 
     def getsize(self, path):
-        return self.stat(path).st_size
+      print ">>>>>>>>>>>>> GETSIZE"
+      apifile = self._getitem(path)
+      if not apifile:
+        raise OSError(1, 'No such file or directory')
+      print "filesize :", apifile.size
+      return apifile.size
+        #return self.stat(path).st_size
 
     def getmtime(self, path):
         return self.stat(path).st_mtime
@@ -300,6 +314,11 @@ class HttpFS(ftpserver.AbstractedFS):
 #            return obj in objects
 
 
+    def findincache(self, filename):
+      if filename in self.dirlistcache:
+        return self.dirlistcache[filename]
+
+
     def _getitem(self, filename):
         print "filename: ", filename
 #        username, bucket, obj = self.parse_fspath(filename)
@@ -308,15 +327,15 @@ class HttpFS(ftpserver.AbstractedFS):
           print 'found............'
           apifile = self.dirlistcache[filename]
           print 'found........', apifile.id, apifile.name
-
         else:
           if filename == os.path.sep:
-            items = operations.api.get_items()
+            # items = operations.api.get_items()
             return False
           else:
             id = idfinder.find_item_by_path(filename)
             print "file id:", id
             apifile = operations.api.get_items(id=id)[0]
+            self.dirlistcache[filename] = apifile
             
         return apifile #.get_download_url()
 
