@@ -73,7 +73,6 @@ class HttpFD(object):
 
 
     def seek(self, frombytes, **kwargs):
-        print ">>>>>>>>>> seek"
         self.seekpos = frombytes
         return 
         
@@ -172,7 +171,6 @@ class HttpFS(ftpserver.AbstractedFS):
       self.remove_from_cache(path)
 
     def rename(self, src, dst):
-      print "src>>>>>>", src, dst
       apifile = self._getitem(src)
       if not apifile:
         raise OSError(2, 'No such file or directory')
@@ -216,7 +214,6 @@ class HttpFS(ftpserver.AbstractedFS):
         return False
 
     def getsize(self, path):
-      print ">>>>>>>>>>>>> GETSIZE"
       apifile = self._getitem(path)
       if not apifile:
         raise OSError(1, 'No such file or directory')
@@ -225,14 +222,12 @@ class HttpFS(ftpserver.AbstractedFS):
         #return self.stat(path).st_size
 
     def getmtime(self, path):
-        print "mtime"
         return self.stat(path).st_mtime
 
     def realpath(self, path):
         return path
 
     def lexists(self, path):
-      print "lexists"
       apifile = self._getitem(path)
       if not apifile:
         raise OSError(2, 'No such file or directory')
@@ -240,8 +235,6 @@ class HttpFS(ftpserver.AbstractedFS):
 
 
     def _getitem(self, filename):
-        print "filename: ", filename
-
         if filename in self.dirlistcache:
           apifile = self.dirlistcache[filename]
           print 'found........', apifile.id, apifile.name
@@ -259,9 +252,7 @@ class HttpFS(ftpserver.AbstractedFS):
 
 
     def stat(self, path):
-        print ">>>>>> stat:", path
         apifile = self._getitem(path)
-
         return os.stat_result((666, 0L, 0L, 0, 0, 0, apifile.size, 0, 0, 0))
 
     exists = lexists
@@ -294,16 +285,9 @@ class HttpFS(ftpserver.AbstractedFS):
         return self.format_list_items(items)
 
     def format_mlsx(self, basedir, listing, perms, facts, ignore_err=True):
-
-      print 'facts', facts
-      print 'basedir', basedir
-      print 'listing', listing
-
       # find item in cache...
       if basedir in self.dirlistcache:
-        print 'found............'
         fnd = self.dirlistcache[basedir]
-        print 'found........', fnd.id, fnd.name
         try:
           items = operations.api.get_items(parent_id = fnd.id)
         except:
@@ -357,8 +341,14 @@ class HttpOperations(object):
         self.password = password
         config.apisecret = password
         config.apikey    = username
-        print "here !..............."
         self.api = putio.Api(config.apikey,config.apisecret)
+        
+        print "checking user & passwd"
+        username = self.api.get_user_name()
+        if not username:
+            return False
+        
+        print "> welcome ", username
         return True
 
 
@@ -376,8 +366,7 @@ Files and keeps track of them.
 
     def validate_authentication(self, username, password):
         try:
-            operations.authenticate(username, password)
-            return True
+            return operations.authenticate(username, password)
         except:
             return False
 
@@ -406,6 +395,7 @@ def main():
       ftp_handler = ftpserver.FTPHandler
       ftp_handler.authorizer = HttpAuthorizer()
       ftp_handler.abstracted_fs = HttpFS
+      
 #      ftp_handler.passive_ports = range(60000, 65535)
 #      try:
 #          ftp_handler.masquerade_address = gethostbyname(options.bind_address)
