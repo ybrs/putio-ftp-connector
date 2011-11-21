@@ -1,6 +1,6 @@
 this is a proof of concept ftp server that proxies ftp clients requests to putio http, or in other words an ftp interface to put.io.
 
-its alpha, and works for me. for screenshots or some more details i wrote a blog post http://ybrs.in/2011/01/27/putio-ftp-connector/
+its alpha, and works for me. for screenshots or some more details i wrote a blog post http://splitjoin.com/2011/01/27/putio-ftp-connector/
 
 uses pyftpdlib, code is modified from https://github.com/tomatohater/faetus/blob/master/bin/faetus-server . 
 
