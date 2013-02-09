@@ -389,9 +389,7 @@ Files and keeps track of them.
         return 'Goodbye %s' % username
 
 
-
-def main():
-
+def run_ftp_server():
       ftp_handler = ftpserver.FTPHandler
       ftp_handler.authorizer = HttpAuthorizer()
       ftp_handler.abstracted_fs = HttpFS
@@ -442,8 +440,6 @@ def main():
 #    ftpd.serve_forever()
 
 
-
-
 if __name__ == '__main__':
 
 #    api = putio.Api(config.apikey, config.apisecret)
@@ -454,7 +450,5 @@ if __name__ == '__main__':
 #
 #    for it in items:
 #        print "%s  %s" % (it.id, it.name)
-
-
-    main()
+    run_ftp_server()
 

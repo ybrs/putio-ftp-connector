@@ -1,0 +1,11 @@
+*.pyc
+/web/uploads/
+/web/maintenance.html
+*.swp
+env
+*.egg-info/
+.vagrant
+.idea
+.DS_Store
+.project
+.pydevproject
