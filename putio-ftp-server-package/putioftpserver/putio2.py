@@ -160,6 +160,10 @@ class _File(_BaseResource):
         return cls(f)
 
     @property
+    def is_dir(self):
+        return 'directory' in self.content_type
+
+    @property
     def files(self):
         '''Helper function for listing inside of directory'''
         return self.list(parent_id=self.id)

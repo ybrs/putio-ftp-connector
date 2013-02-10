@@ -132,9 +132,21 @@ class HttpFS(ftpserver.AbstractedFS):
         self.remove_from_cache(path)
         self.remove_from_cache(dirs[0])
       
-
+    def get_putio_api_client(self):        
+        try:
+            userdict = self.cmd_channel.authorizer.users[self.cmd_channel.username]
+            if 'client' in userdict:
+                return userdict['client']
+            else:
+                print ">>>> token:", userdict['token']
+                userdict['client'] = putio2.Client(userdict['token'])
+                return userdict['client']
+                 
+        except:
+            # TODO: properly close the channel        
+            raise 
+    
     def listdir(self, path):
-        print ">>>>", self.cmd_channel.authorizer.token
         ret = []
         try:
             item = self._getitem(path)
@@ -142,13 +154,12 @@ class HttpFS(ftpserver.AbstractedFS):
             return []
 
         if not item:
-            items = operations.api.get_items()
+            items = self.get_putio_api_client().File.list()
         else:
             try:
                 items = operations.api.get_items(parent_id=item.id)
             except:
-                return []
-            
+                return []            
         for i in items:
             ret.append(i.name)          
         return ret
@@ -273,17 +284,17 @@ class HttpFS(ftpserver.AbstractedFS):
 
     def get_list_dir(self, path):
         try:
-          item = self._getitem(path)
+            item = self._getitem(path)
         except:
-          return self.format_list_items([])
+            return self.format_list_items([])
         
         if not item:
-          items = operations.api.get_items()
+            items = operations.api.get_items()
         else:
-          try:
-            items = operations.api.get_items(parent_id=item.id)
-          except:
-            return self.format_list_items([])
+            try:
+                items = operations.api.get_items(parent_id=item.id)
+            except:
+                return self.format_list_items([])
         return self.format_list_items(items)
 
     def format_mlsx(self, basedir, listing, perms, facts, ignore_err=True):
@@ -296,23 +307,25 @@ class HttpFS(ftpserver.AbstractedFS):
           items = []
       else:
         if basedir == os.path.sep:
-          items = operations.api.get_items()
+            items = self.get_putio_api_client().File.list()
         else:
-          parent_id = self.idfinder.find_item_by_path(pathtoid._utf8(basedir))
-          print "parent_id:", parent_id
-          items = operations.api.get_items(parent_id=parent_id)
-
+            parent_id = self.idfinder.find_item_by_path(pathtoid._utf8(basedir))
+            print "parent_id:", parent_id
+            items = operations.api.get_items(parent_id=parent_id)
 
       c = 0
       s = ''
       for i in items:
+          print "================================"
+          print dir(i)
+          print "================================"
           c = c + 1
 
           type = 'type=file;'
 
           if 'type' in facts:
-            if i.type == 'folder':
-              type = 'type=dir;'
+              if 'directory' in i.content_type:
+                  type = 'type=dir;'
 
           if 'size' in facts:
               size = 'size=%s;' % i.size  # file size
@@ -320,9 +333,9 @@ class HttpFS(ftpserver.AbstractedFS):
           ln = "%s%sperm=r;modify=20071029155301;unique=11150051; %s\r\n" % (type, size, i.name)
 
           if basedir== os.path.sep:
-            key = '/%s' % (pathtoid._utf8(i.name))
+              key = '/%s' % (pathtoid._utf8(i.name))
           else:
-            key = '%s/%s' % (pathtoid._utf8(basedir), pathtoid._utf8(i.name))
+              key = '%s/%s' % (pathtoid._utf8(basedir), pathtoid._utf8(i.name))
 
           self.dirlistcache[key] = i
           print 'key:', key
@@ -341,9 +354,9 @@ class HttpOperations(object):
     def get_oauth_token(self, username, password):
         o = {'name':username, 'password':password, 'next':'/'}    
         s = requests.Session()
-        r = s.post("https://put.io/login", data=o)
-        r = s.get('https://put.io/v2/oauth2/apptoken/329')
-        r = s.post('https://put.io/v2/oauth2/authenticate?client_id=329&response_type=oob&redirect_uri=na', data={'allow':'Allow'})    
+        r = s.post("https://put.io/login", data=o, timeout=1)
+        r = s.get('https://put.io/v2/oauth2/apptoken/329', timeout=1)
+        r = s.post('https://put.io/v2/oauth2/authenticate?client_id=329&response_type=oob&redirect_uri=na', data={'allow':'Allow'}, timeout=1)    
         token = ''
         for ln in r.content.split("\n"):
             if 'appsecret' in ln:
@@ -368,7 +381,7 @@ class HttpAuthorizer(ftpserver.DummyAuthorizer):
     '''FTP server authorizer. Logs the users into Putio Cloud
        Files and keeps track of them.
     '''        
-    def __init__(self):
+    def __init__(self):        
         self.users = {}
     
     def validate_authentication(self, username, password):        
