@@ -1167,10 +1167,11 @@ class AbstractedFS:
      - (str) rnfr: source file to be renamed.
     """
 
-    def __init__(self):
+    def __init__(self, cmd_channel):
         self.root = None
         self.cwd = '/'
         self.rnfr = None
+        self.cmd_channel = cmd_channel
 
     # --- Pathname / conversion utilities
 
@@ -1662,7 +1663,7 @@ class FTPHandler(asynchat.async_chat):
 
         # public session attributes
         self.server = server
-        self.fs = self.abstracted_fs()
+        self.fs = self.abstracted_fs(self)
         self.authenticated = False
         self.username = ""
         self.password = ""

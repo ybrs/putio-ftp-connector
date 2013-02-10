@@ -6,6 +6,8 @@ users', setting a limit for incoming connections.
 """
 
 import os
+import re
+import requests
 
 #from pyftpdlib
 import ftpserver
@@ -17,6 +19,7 @@ from pathtoid import PathToId
 import pathtoid
 import config
 import time
+import putio2
 
 class HttpFD(object):
 
@@ -86,12 +89,13 @@ api = None
 
 class HttpFS(ftpserver.AbstractedFS):
 
-    def __init__(self):
+    def __init__(self, cmd_channel):
         self.root = None
         self.cwd = '/'
         self.rnfr = None
         self.dirlistcache = {}
         self.idfinder = idfinder
+        self.cmd_channel = cmd_channel        
 
     def open(self, filename, mode):
         print "filename: ", filename
@@ -119,56 +123,55 @@ class HttpFS(ftpserver.AbstractedFS):
         self.cwd = path.decode('utf-8').encode('utf-8')
 
     def mkdir(self, path):
-      dirs = os.path.split(path)
-      apifile = self._getitem(dirs[0])
-      if not apifile: #this is root
-        operations.api.create_folder(name = dirs[1], parent_id = 0)
-      else:
-        apifile.create_folder(name=dirs[1])
-      self.remove_from_cache(path)
-      self.remove_from_cache(dirs[0])
+        dirs = os.path.split(path)
+        apifile = self._getitem(dirs[0])
+        if not apifile: #this is root
+            operations.api.create_folder(name = dirs[1], parent_id = 0)
+        else:
+            apifile.create_folder(name=dirs[1])
+        self.remove_from_cache(path)
+        self.remove_from_cache(dirs[0])
       
 
     def listdir(self, path):
+        print ">>>>", self.cmd_channel.authorizer.token
         ret = []
         try:
-          item = self._getitem(path)
+            item = self._getitem(path)
         except:
-          return []
-
-        if not item:
-          items = operations.api.get_items()
-        else:
-          try:
-            items = operations.api.get_items(parent_id=item.id)
-          except:
             return []
 
+        if not item:
+            items = operations.api.get_items()
+        else:
+            try:
+                items = operations.api.get_items(parent_id=item.id)
+            except:
+                return []
+            
         for i in items:
-          ret.append(i.name)
-          
+            ret.append(i.name)          
         return ret
 
     def remove_from_cache(self, path):
-      if path in self.dirlistcache:
-        del self.dirlistcache[path]
-      idfinder.invalidate_items_cache_by_path(path)
-      
+        if path in self.dirlistcache:
+            del self.dirlistcache[path]
+        idfinder.invalidate_items_cache_by_path(path)
 
     def rmdir(self, path):
-      apifile = self._getitem(path)
-      if not apifile:
-        raise OSError(2, 'No such file or directory')
-      apifile.delete_item()
-      self.remove_from_cache(path)
+        apifile = self._getitem(path)
+        if not apifile:
+            raise OSError(2, 'No such file or directory')
+        apifile.delete_item()
+        self.remove_from_cache(path)
 
 
     def remove(self, path):
-      apifile = self._getitem(path)
-      if not apifile:
-        raise OSError(2, 'No such file or directory')
-      apifile.delete_item()
-      self.remove_from_cache(path)
+        apifile = self._getitem(path)
+        if not apifile:
+            raise OSError(2, 'No such file or directory')
+        apifile.delete_item()
+        self.remove_from_cache(path)
 
     def rename(self, src, dst):
       apifile = self._getitem(src)
@@ -203,22 +206,22 @@ class HttpFS(ftpserver.AbstractedFS):
         return False
 
     def isdir(self, path):
-      if path == os.path.sep:
-        return True
-      apifile = self._getitem(path)
-      if not apifile:
-        raise OSError(2, 'No such file or directory')
-      if apifile.is_dir:
-        return True
-      else:
-        return False
+        if path == os.path.sep:
+            return True
+        apifile = self._getitem(path)
+        if not apifile:
+            raise OSError(2, 'No such file or directory')
+        if apifile.is_dir:
+            return True
+        else:
+            return False
 
     def getsize(self, path):
-      apifile = self._getitem(path)
-      if not apifile:
-        raise OSError(1, 'No such file or directory')
-      print "filesize :", apifile.size
-      return long(apifile.size)
+        apifile = self._getitem(path)
+        if not apifile:
+            raise OSError(1, 'No such file or directory')
+        print "filesize :", apifile.size
+        return long(apifile.size)
         #return self.stat(path).st_size
 
     def getmtime(self, path):
@@ -228,11 +231,10 @@ class HttpFS(ftpserver.AbstractedFS):
         return path
 
     def lexists(self, path):
-      apifile = self._getitem(path)
-      if not apifile:
-        raise OSError(2, 'No such file or directory')
-      return apifile
-
+        apifile = self._getitem(path)
+        if not apifile:
+            raise OSError(2, 'No such file or directory')
+        return apifile
 
     def _getitem(self, filename):
         if filename in self.dirlistcache:
@@ -262,12 +264,12 @@ class HttpFS(ftpserver.AbstractedFS):
         return True
 
     def format_list_items(self, items):
-      for item in items:
-        if item.is_dir:
-          s = 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % ('aaa', 0, item.name)
-        else:
-          s = '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % ('aaa', item.size, time.strftime("%b %d %H:%M"), item.name)
-        yield s.encode('utf-8')
+        for item in items:
+            if item.is_dir:
+                s = 'drwxrwxrwx 1 %s group %8s Jan 01 00:00 %s\r\n' % ('aaa', 0, item.name)
+            else:
+                s = '-rw-rw-rw- 1 %s group %8s %s %s\r\n' % ('aaa', item.size, time.strftime("%b %d %H:%M"), item.name)
+            yield s.encode('utf-8')
 
     def get_list_dir(self, path):
         try:
@@ -336,38 +338,46 @@ class HttpOperations(object):
         self.connection = None
         self.username = None
 
-    def authenticate(self, username, password):
-        self.username = username
-        self.password = password
-        config.apisecret = password
-        config.apikey    = username
-        self.api = putio.Api(config.apikey,config.apisecret)
-        
-        print "checking user & passwd"
-        username = self.api.get_user_name()
-        if not username:
-            return False
-        
-        print "> welcome ", username
-        return True
+    def get_oauth_token(self, username, password):
+        o = {'name':username, 'password':password, 'next':'/'}    
+        s = requests.Session()
+        r = s.post("https://put.io/login", data=o)
+        r = s.get('https://put.io/v2/oauth2/apptoken/329')
+        r = s.post('https://put.io/v2/oauth2/authenticate?client_id=329&response_type=oob&redirect_uri=na', data={'allow':'Allow'})    
+        token = ''
+        for ln in r.content.split("\n"):
+            if 'appsecret' in ln:
+                m = re.search('value="(.*?)"', ln)
+                if m:
+                    token = m.groups()[0]
+        return token
 
+    def authenticate(self, username, password):
+        token = self.get_oauth_token(username, password)
+        if not token:
+            return False
+        print "> welcome ", username, token
+        self.token = token
+        return True
 
     def __repr__(self):
         return self.connection
 
-operations = HttpOperations()
-
 
 class HttpAuthorizer(ftpserver.DummyAuthorizer):
     '''FTP server authorizer. Logs the users into Putio Cloud
-Files and keeps track of them.
-'''
-    users = {}
-
-    def validate_authentication(self, username, password):
+       Files and keeps track of them.
+    '''        
+    def __init__(self):
+        self.users = {}
+    
+    def validate_authentication(self, username, password):        
         try:
-            return operations.authenticate(username, password)
-        except:
+            self.operations = HttpOperations()
+            self.operations.authenticate(username, password)
+            self.users[username] = {'token': self.operations.token, 'user_id': 4}
+            return True            
+        except:            
             return False
 
     def has_user(self, username):
@@ -388,67 +398,21 @@ Files and keeps track of them.
     def get_msg_quit(self, username):
         return 'Goodbye %s' % username
 
-
+    
 def run_ftp_server():
-      ftp_handler = ftpserver.FTPHandler
-      ftp_handler.authorizer = HttpAuthorizer()
-      ftp_handler.abstracted_fs = HttpFS
-      
-#      ftp_handler.passive_ports = range(60000, 65535)
-#      try:
-#          ftp_handler.masquerade_address = gethostbyname(options.bind_address)
-#      except gaierror, (_, errmsg):
-#          sys.exit('Address error: %s' % errmsg)
-#
-#      ftpd = ftpserver.FTPServer((options.bind_address,
-#                                  options.port),
-#                                 ftp_handler)
-      address = (config.ip_address, 2121 )
-      ftpd = ftpserver.FTPServer(address, ftp_handler)
-      ftpd.serve_forever()
-
-
-#    # Instantiate a dummy authorizer for managing 'virtual' users
-#    authorizer = ftpserver.DummyAuthorizer()
-#
-#    # Define a new user having full r/w permissions and a read-only
-#    # anonymous user
-#    authorizer.add_user('user', '12345', '/home/aybars/completed', perm='elradfmw')
-#    authorizer.add_anonymous('/home/aybars/completed')
-#
-#    # Instantiate FTP handler class
-#    ftp_handler = ftpserver.FTPHandler
-#    ftp_handler.authorizer = authorizer
-#
-#    # Define a customized banner (string returned when client connects)
-#    ftp_handler.banner = "pyftpdlib %s based ftpd ready." %ftpserver.__ver__
-#
-#    # Specify a masquerade address and the range of ports to use for
-#    # passive connections.  Decomment in case you're behind a NAT.
-#    #ftp_handler.masquerade_address = '151.25.42.11'
-#    #ftp_handler.passive_ports = range(60000, 65535)
-#
-#    # Instantiate FTP server class and listen to 0.0.0.0:21
-#    address = ('', 2121 )
-#    ftpd = ftpserver.FTPServer(address, ftp_handler)
-#
-#    # set a limit for connections
-#    ftpd.max_cons = 256
-#    ftpd.max_cons_per_ip = 5
-#
-#    # start ftp server
-#    ftpd.serve_forever()
+    #    token = ''
+    #    client = putio2.Client(token)
+    #    files = client.File.list()
+    #    print files
+    #    return
+    ftp_handler = ftpserver.FTPHandler
+    ftp_handler.authorizer = HttpAuthorizer()
+    ftp_handler.abstracted_fs = HttpFS
+    address = (config.ip_address, 2121)
+    ftpd = ftpserver.FTPServer(address, ftp_handler)
+    ftpd.serve_forever()
 
 
 if __name__ == '__main__':
-
-#    api = putio.Api(config.apikey, config.apisecret)
-#
-#    # getting your items
-#    items = api.get_items(parent_id=11110932)
-#    #yield items
-#
-#    for it in items:
-#        print "%s  %s" % (it.id, it.name)
     run_ftp_server()
 
